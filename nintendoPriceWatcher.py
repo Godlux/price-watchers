@@ -1,5 +1,8 @@
 import requests
+import smtplib
 import time
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from datetime import datetime
 
 
@@ -18,7 +21,7 @@ products = [
   {'name': 'Firewatch', 'id': 70010000007925, 'desiredPrice': 11 },
   {'name': 'Golf Story', 'id': 70010000000775, 'desiredPrice': 10 },
   {'name': 'SteamWorld Dig 2', 'id': 70010000002612, 'desiredPrice': 7.51 },
-  {'name': 'Super Smash Bros. Ultimate', 'id': 70010000012331, 'desiredPrice': 45 }
+  {'name': 'Super Smash Bros. Ultimate', 'id': 70010000012331, 'desiredPrice': 45 },
 ]
 
 
@@ -45,21 +48,45 @@ def postToIfttt(event, value1, value2, value3):
   requests.post(event_url, json=data)
 
 
+def emailPriceAlert(product_name, product_price, product_sale_end):
+  server = smtplib.SMTP_SSL('smtp server', 465)
+  server.login('name', 'password')
+
+  from_email = ''
+  to_email = ''
+
+  msg = MIMEMultipart()
+  msg['From'] = from_email
+  msg['To'] = to_email
+  msg['Subject'] = 'Pi 3: Nintendo Price Alert'
+
+  body = product_name + ' dropped below your desired price! On sale for ' + str(product_price) + 'EUR until ' + product_sale_end
+  msg.attach(MIMEText(body, 'plain'))
+  text = msg.as_string()
+
+  server.sendmail(from_email, to_email, text)
+  server.quit()
+
+
 def main():
   data = getPrices()
 
   for i, item in enumerate(data):
+    product_name = products[i]['name']
 
     if 'discount_price' in item:
-      product_name = products[i]['name']
       product_price = float(item['discount_price']['raw_value'])
       product_sale_end = item['discount_price']['end_datetime']
       print(product_name + ' is on sale for ', product_price, 'EUR until', product_sale_end)
+    elif 'regular_price' in item:
+      product_price = float(item['regular_price']['raw_value'])
+      product_sale_end = "[new regular price]"
 
-      if product_price < products[i]['desiredPrice']:
-        print(product_name + ' dropped below your desired price! On sale for ', product_price, 'EUR until', product_sale_end)
-        postToIfttt('nintendo_price_watcher', product_name , product_price, product_sale_end)
-        time.sleep(10*60) # Throttle ifttt job
+    if product_price < products[i]['desiredPrice']:
+      print(product_name + ' dropped below your desired price! On sale for ', product_price, 'EUR until', product_sale_end)
+      #postToIfttt('nintendo_price_watcher', product_name , product_price, product_sale_end)
+      emailPriceAlert(product_name, product_price, product_sale_end)
+      time.sleep(5*60) # Throttle action
 
 
 if __name__ == '__main__':
